@@ -1,4 +1,8 @@
+import java.io.File
+import java.io.FileOutputStream
+import java.net.HttpURLConnection
 import java.net.URL
+import org.gradle.api.GradleException
 
 plugins {
     id("com.android.application")
@@ -75,7 +79,7 @@ val downloadSravaaniModel by tasks.registering {
         val model = sravaaniModel.asFile
         val tokens = sravaaniTokens.asFile
 
-        fun fetchIfMissing(url: String, destination: java.io.File, expectedBytes: Long) {
+        fun fetchIfMissing(url: String, destination: File, expectedBytes: Long) {
             if (destination.exists() && destination.length() == expectedBytes) return
 
             val maxAttempts = 5
@@ -88,7 +92,7 @@ val downloadSravaaniModel by tasks.registering {
                         "Downloading ${destination.name} (${expectedBytes} bytes total, attempt $attempt/$maxAttempts" +
                             (if (resuming) ", resuming from $alreadyHave" else "") + ")..."
                     )
-                    val connection = (URL(url).openConnection() as java.net.HttpURLConnection).apply {
+                    val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                         connectTimeout = 30_000
                         readTimeout = 60_000
                         instanceFollowRedirects = true
@@ -98,10 +102,10 @@ val downloadSravaaniModel by tasks.registering {
                     connection.connect()
                     val ok = connection.responseCode in 200..299
                     check(ok) { "HTTP ${connection.responseCode} fetching ${destination.name}" }
-                    val append = resuming && connection.responseCode == java.net.HttpURLConnection.HTTP_PARTIAL
+                    val append = resuming && connection.responseCode == HttpURLConnection.HTTP_PARTIAL
                     if (!append && destination.exists()) destination.delete()
                     connection.inputStream.buffered().use { input ->
-                        java.io.FileOutputStream(destination, append).buffered().use { output -> input.copyTo(output) }
+                        FileOutputStream(destination, append).buffered().use { output -> input.copyTo(output) }
                     }
                     check(destination.length() == expectedBytes) {
                         "Unexpected ${destination.name} size: ${destination.length()} (expected $expectedBytes)"
@@ -113,7 +117,7 @@ val downloadSravaaniModel by tasks.registering {
                     if (attempt < maxAttempts) Thread.sleep(2_000L * attempt)
                 }
             }
-            throw org.gradle.api.GradleException(
+            throw GradleException(
                 "Failed to download ${destination.name} after $maxAttempts attempts", lastError
             )
         }
