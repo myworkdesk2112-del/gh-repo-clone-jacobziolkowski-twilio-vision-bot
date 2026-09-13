@@ -1,0 +1,7 @@
+.gradle/
+.idea/
+local.properties
+**/build/
+*.iml
+app/src/main/assets/sravaani/model-la13.onnx
+app/src/main/assets/sravaani/tokens.txt
