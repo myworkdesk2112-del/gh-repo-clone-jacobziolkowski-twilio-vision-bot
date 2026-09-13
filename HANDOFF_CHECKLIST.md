@@ -5,8 +5,8 @@
 - [x] Verify sherpa-onnx artifact resolves — confirmed on CI (JitPack resolves `com.github.k2-fsa:sherpa-onnx:v1.13.4` fine on an unrestricted-network runner)
 - [x] Verify `SravaaniSttEngine` against exact runtime API — fixed a call to a nonexistent `OnlineStream.setOption` API
 - [x] Verify SraVaani model download and expected byte sizes — download task hardened (retry/backoff/resume) and confirmed working on CI: both files downloaded and matched their pinned exact sizes
-- [x] Build debug APK successfully — **BUILD SUCCESSFUL** on GitHub Actions run [`34784839011`](https://github.com/myworkdesk2112-del/gh-repo-clone-jacobziolkowski-twilio-vision-bot/actions/runs/34784839011)
-- [ ] Run lint — not yet added to the CI workflow; nothing in the audit suggests it would fail, but it hasn't actually been run
+- [x] Build debug APK successfully — **BUILD SUCCESSFUL** on three consecutive GitHub Actions runs, latest [`34787263485`](https://github.com/myworkdesk2112-del/gh-repo-clone-jacobziolkowski-twilio-vision-bot/actions/runs/34787263485)
+- [x] Run lint — `:app:lintDebug` added to CI and **passed** ("BUILD SUCCESSFUL", no lint errors); HTML report uploaded as the `lint-report` CI artifact for a manual warnings skim before release
 - [ ] Run tests where available — no tests exist in the handoff project
 - [x] Inspect APK: SraVaani ONNX + `tokens.txt` embedded — confirmed via `unzip -l`, exact byte sizes match (658,699,885 / 68,907)
 - [x] Inspect APK: arm64 native libs present — confirmed: `libonnxruntime.so`, `libsherpa-onnx-jni.so`, `libsherpa-onnx-c-api.so`, `libsherpa-onnx-cxx-api.so`, `libandroidx.graphics.path.so`

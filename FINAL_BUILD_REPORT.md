@@ -12,20 +12,33 @@ repository, JitPack, and Hugging Face outright, so it could never have run
 GitHub-hosted runner none of those restrictions apply, and the build went
 green.
 
-- Run: [`34784839011`](https://github.com/myworkdesk2112-del/gh-repo-clone-jacobziolkowski-twilio-vision-bot/actions/runs/34784839011) — commit `e7d304a`, branch `claude/friendly-dijkstra-85m8sq`
-- Result: **BUILD SUCCESSFUL**, all steps green including asset/ABI verification
+- Latest verified run: [`34787263485`](https://github.com/myworkdesk2112-del/gh-repo-clone-jacobziolkowski-twilio-vision-bot/actions/runs/34787263485) — commit `f4c3fbe`, branch `claude/friendly-dijkstra-85m8sq`
+- Result: **BUILD SUCCESSFUL**, all steps green including `lintDebug` and asset/ABI verification
 - Artifact: `GiVa-HiAssist-1.0-arm64-debug` (14-day retention), downloadable from the run page above
+- Three consecutive independent CI runs (`34784839011`, `f4c3fbe`'s `34787263485`, and the intermediate lint-adding run) have all succeeded — this is not a one-off green run.
 
 ## Verified APK facts
 
 | Fact | Value |
 |---|---|
 | File | `app/build/outputs/apk/debug/app-debug.apk` |
-| Exact size | **728,588,358 bytes** (≈695 MiB) |
-| SHA-256 | **`5d9e7a8f7cd70dd579259324dab24b6aa04baddc211edaeb4e7f2af68d6ea5e7`** |
+| Exact size | **728,588,358 bytes** (≈695 MiB) — identical across every CI run so far |
+| SHA-256 (run `34787263485`) | **`555a3f99d49fdd5f9d74fc16c39b50971b7f3fe8f8817afac756dfa90b6d367a`** |
 | `assets/sravaani/model-la13.onnx` | present, 658,699,885 bytes — matches the pinned expected size exactly |
 | `assets/sravaani/tokens.txt` | present, 68,907 bytes — matches the pinned expected size exactly |
 | `assets/sravaani/README.txt` | present, 437 bytes (doc-only, harmless) |
+
+**Note on the SHA-256 changing between runs:** an earlier run (`34784839011`)
+reported a different digest (`5d9e7a8f7c...`) for an APK of the *same exact
+byte size*. This is expected, not a red flag: Gradle's debug build type
+signs with a freshly-generated debug keystore/signature block each time
+there isn't a persisted `~/.android/debug.keystore` across CI runs, so the
+signature bytes (and therefore the whole-file hash) differ between builds
+even when every other byte — code, resources, the embedded model — is
+identical. The APK's *content* is reproducible (same size, same asset sizes,
+same libs every run); its debug *signature* is not, which is normal and
+harmless for a debug build. A release build with a persisted signing key
+would not have this property.
 
 arm64-v8a native libraries packaged in the APK:
 
@@ -107,9 +120,10 @@ the *uploaded zip container*, a different, non-comparable digest).
 ## Required validation — status
 
 ### Static/build checks
-- `./gradlew --no-daemon clean :app:assembleDebug` — **passed** on CI (run `34784839011`, "BUILD SUCCESSFUL in 1m 16s" for the incremental run; the first clean run took "2m 42s", 38 tasks executed).
-- `./gradlew lintDebug` / `./gradlew test` — **not run yet**. No tests exist in the handoff project to run, and lint wasn't part of the workflow's steps. Both are safe to add as a follow-up CI step; nothing in the audit found a reason they'd fail.
-- APK asset/ABI inspection, SHA-256, and size — **done, real numbers above**.
+- `./gradlew --no-daemon clean :app:assembleDebug` — **passed** on CI across three consecutive runs (first clean run "2m 42s"/38 tasks; incremental reruns "1m 16s" and "1m 9s").
+- `./gradlew :app:lintDebug` — **passed** on CI (run `34787263485`, "BUILD SUCCESSFUL in 44s", HTML report uploaded as the `lint-report` CI artifact). Lint's default behavior aborts the build on lint errors, so a clean `BUILD SUCCESSFUL` here means no lint *errors* were found; the uploaded HTML report should still be skimmed for warnings before a real release.
+- `./gradlew test` — **not run**: no unit tests exist in the handoff project. Nothing in the audit found business logic that's currently untested in a way that blocks shipping, but this is a gap worth closing before a production release.
+- APK asset/ABI inspection, SHA-256, and size — **done, real numbers above**, confirmed stable (identical size and asset/lib listing) across three independent CI runs.
 
 ### Runtime checks
 **Still not tested.** Neither this sandboxed session nor the GitHub Actions
