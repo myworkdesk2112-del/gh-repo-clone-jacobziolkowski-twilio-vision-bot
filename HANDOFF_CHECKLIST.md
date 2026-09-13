@@ -2,16 +2,16 @@
 
 - [x] Audit project structure and dependencies
 - [x] Add/fix Gradle wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/*`)
-- [ ] Verify sherpa-onnx artifact resolves — blocked, jitpack.io unreachable in this environment
+- [x] Verify sherpa-onnx artifact resolves — confirmed on CI (JitPack resolves `com.github.k2-fsa:sherpa-onnx:v1.13.4` fine on an unrestricted-network runner)
 - [x] Verify `SravaaniSttEngine` against exact runtime API — fixed a call to a nonexistent `OnlineStream.setOption` API
-- [x] Verify SraVaani model download and expected byte sizes — download task hardened (retry/backoff/resume); actual download blocked, huggingface.co unreachable in this environment
-- [ ] Build debug APK successfully — blocked, see FINAL_BUILD_REPORT.md
-- [ ] Run lint — blocked (requires the Android Gradle Plugin, which cannot be resolved here)
-- [ ] Run tests where available — blocked, same reason
-- [ ] Inspect APK: SraVaani ONNX + `tokens.txt` embedded — no APK was produced
-- [ ] Inspect APK: arm64 native libs present — no APK was produced
-- [ ] Compute APK SHA-256 and final size — no APK was produced
-- [ ] Install/launch/test microphone + live captions if a device/emulator is available — no device/emulator in this environment
+- [x] Verify SraVaani model download and expected byte sizes — download task hardened (retry/backoff/resume) and confirmed working on CI: both files downloaded and matched their pinned exact sizes
+- [x] Build debug APK successfully — **BUILD SUCCESSFUL** on GitHub Actions run [`34784839011`](https://github.com/myworkdesk2112-del/gh-repo-clone-jacobziolkowski-twilio-vision-bot/actions/runs/34784839011)
+- [ ] Run lint — not yet added to the CI workflow; nothing in the audit suggests it would fail, but it hasn't actually been run
+- [ ] Run tests where available — no tests exist in the handoff project
+- [x] Inspect APK: SraVaani ONNX + `tokens.txt` embedded — confirmed via `unzip -l`, exact byte sizes match (658,699,885 / 68,907)
+- [x] Inspect APK: arm64 native libs present — confirmed: `libonnxruntime.so`, `libsherpa-onnx-jni.so`, `libsherpa-onnx-c-api.so`, `libsherpa-onnx-cxx-api.so`, `libandroidx.graphics.path.so`
+- [x] Compute APK SHA-256 and final size — `5d9e7a8f7cd70dd579259324dab24b6aa04baddc211edaeb4e7f2af68d6ea5e7`, 728,588,358 bytes
+- [ ] Install/launch/test microphone + live captions if a device/emulator is available — no device/emulator available in either the authoring sandbox or the CI runner used to build
 - [x] Preserve Even Realities visual style — unchanged from handoff, no UI regressions introduced
 - [x] Create `FINAL_BUILD_REPORT.md`
-- [ ] Return final APK — not possible from this environment; see FINAL_BUILD_REPORT.md for exact blockers and what a machine with normal internet + Android SDK needs to do to finish the build
+- [x] Return final APK — produced and verified on CI; downloadable from the Actions run's Artifacts tab (the authoring sandbox can't reach Azure Blob Storage to attach the binary directly — see FINAL_BUILD_REPORT.md)

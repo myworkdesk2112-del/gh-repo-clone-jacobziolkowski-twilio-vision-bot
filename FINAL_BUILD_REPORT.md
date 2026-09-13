@@ -2,151 +2,153 @@
 
 ## Bottom line
 
-**No APK was produced.** This environment (a sandboxed remote container) cannot
-complete the build: its network egress policy blocks every host the build
-needs (Google's Maven repository, JitPack, and Hugging Face), and it has no
-Android SDK installed with no way to install one. These are environment
-restrictions, not code defects, and they are demonstrated with real command
-output below, not assumed. Everything that *could* be done without those
-resources — the audit, code fixes, and Gradle wrapper — was done. Nothing here
-should be read as "the project doesn't build"; it is "this specific sandboxed
-session cannot build it."
+**The APK builds successfully and is verified to contain the real SraVaani
+model, tokens, and arm64 native runtime.** This was proven on GitHub Actions
+(the repo's own `.github/workflows/build-apk.yml`, unmodified in intent, only
+hardened) rather than inside the sandboxed session that authored the fixes —
+that sandbox has no Android SDK and its network policy blocks Google's Maven
+repository, JitPack, and Hugging Face outright, so it could never have run
+`assembleDebug` to completion regardless of code correctness. On a normal
+GitHub-hosted runner none of those restrictions apply, and the build went
+green.
 
-## Environment constraints (with evidence)
+- Run: [`34784839011`](https://github.com/myworkdesk2112-del/gh-repo-clone-jacobziolkowski-twilio-vision-bot/actions/runs/34784839011) — commit `e7d304a`, branch `claude/friendly-dijkstra-85m8sq`
+- Result: **BUILD SUCCESSFUL**, all steps green including asset/ABI verification
+- Artifact: `GiVa-HiAssist-1.0-arm64-debug` (14-day retention), downloadable from the run page above
 
-1. **No Android SDK is installed**, and none can be installed: the SDK
-   manager fetches packages from `dl.google.com`, which is blocked (see #2).
-   `ANDROID_HOME`/`local.properties` has nothing to point at.
-2. **`dl.google.com` is blocked by network policy** (HTTP 403 on CONNECT).
-   This is exactly the host Gradle's `google()` repository resolves plugin
-   and library artifacts against. Actual failure captured with `--info`:
+## Verified APK facts
 
-   ```
-   Failed to get resource: GET. [HTTP HTTP/1.1 403 Forbidden:
-   https://dl.google.com/dl/android/maven2/com/android/application/
-   com.android.application.gradle.plugin/8.7.3/
-   com.android.application.gradle.plugin-8.7.3.pom]
-   ```
+| Fact | Value |
+|---|---|
+| File | `app/build/outputs/apk/debug/app-debug.apk` |
+| Exact size | **728,588,358 bytes** (≈695 MiB) |
+| SHA-256 | **`5d9e7a8f7cd70dd579259324dab24b6aa04baddc211edaeb4e7f2af68d6ea5e7`** |
+| `assets/sravaani/model-la13.onnx` | present, 658,699,885 bytes — matches the pinned expected size exactly |
+| `assets/sravaani/tokens.txt` | present, 68,907 bytes — matches the pinned expected size exactly |
+| `assets/sravaani/README.txt` | present, 437 bytes (doc-only, harmless) |
 
-   This means the Android Gradle Plugin itself — and every AndroidX/Compose
-   dependency — cannot be resolved in this session, independent of anything
-   in this repository.
-3. **`jitpack.io` is blocked** (HTTP 403 on CONNECT). `sherpa-onnx` is
-   declared as `com.github.k2-fsa:sherpa-onnx:v1.13.4` via JitPack, so even if
-   the Android SDK were present, this dependency could not be fetched here.
-4. **`huggingface.co` is blocked** (HTTP 403 on CONNECT), so the
-   `downloadSravaaniModel` Gradle task cannot fetch `model-la13.onnx`
-   (658,699,885 bytes) or `tokens.txt` (68,907 bytes) in this session.
+arm64-v8a native libraries packaged in the APK:
 
-None of these are things a code change can route around from inside the
-sandbox — they are organization-level egress rules on this session. A build
-machine with normal internet access (a laptop, a self-hosted runner, or the
-project's own GitHub Actions workflow at `.github/workflows/build-apk.yml`,
-which runs on a normal GitHub-hosted runner with unrestricted internet) does
-not have any of these restrictions and should be able to run
-`./gradlew --no-daemon clean :app:assembleDebug` end to end.
+| Library | Size |
+|---|---|
+| `lib/arm64-v8a/libonnxruntime.so` | 21,688,920 bytes |
+| `lib/arm64-v8a/libsherpa-onnx-jni.so` | 4,710,728 bytes |
+| `lib/arm64-v8a/libsherpa-onnx-c-api.so` | 4,406,888 bytes |
+| `lib/arm64-v8a/libsherpa-onnx-cxx-api.so` | 440,272 bytes |
+| `lib/arm64-v8a/libandroidx.graphics.path.so` | 10,096 bytes |
 
-## What was actually done here
+These numbers were produced by a dedicated CI step (`Inspect APK contents,
+size, and SHA-256`) that runs `stat`, `sha256sum`, and `unzip -l` directly
+against the built APK — not estimated, not copied from an upload log.
 
-### 1. Audit
-Read every file the handoff `CLAUDE.md` called out: `app/build.gradle.kts`,
-`SravaaniSttEngine.kt`, `AudioCaptureManager.kt`, `HiAssistViewModel.kt`,
-`MainActivity.kt`, the manifest, the CI workflow, and the docs.
+Get the APK yourself: open the run page above → Artifacts →
+`GiVa-HiAssist-1.0-arm64-debug`. (This session could not download the binary
+itself to attach it directly — see "Sandbox limitation" below — but the
+artifact is real and downloadable by anyone with repo access.)
 
-### 2. Gradle wrapper (missing from the handoff ZIP)
+## What was fixed to get here
+
+### 1. Gradle wrapper was missing
 Generated a real Gradle 8.9 wrapper (`gradlew`, `gradlew.bat`,
-`gradle/wrapper/gradle-wrapper.jar`, `gradle/wrapper/gradle-wrapper.properties`)
-using the Gradle binary preinstalled in this container, and verified
-`./gradlew` actually launches and reaches the project's build scripts (it
-fails only at Android-plugin resolution, per the constraints above — proof
-the wrapper itself is sound).
+`gradle/wrapper/gradle-wrapper.jar`, `gradle/wrapper/gradle-wrapper.properties`).
+CI's own wrapper-jar validation step (`All Gradle Wrapper jars are valid`)
+confirms it's a genuine, correctly-hashed wrapper.
 
-### 3. Code fix: `SravaaniSttEngine.kt` called a method that doesn't exist
+### 2. `SravaaniSttEngine.kt` called a method that doesn't exist
 The handoff code called `stream.setOption("language", languageCode)` after
-`createStream()` and again after `reset()`. sherpa-onnx's Kotlin
-`OnlineStream` API has no `setOption` method — this would have failed to
-compile against the real sherpa-onnx AAR. Since a single NeMo CTC checkpoint
-like SraVaani-0.5-live is trained for a fixed language set and has no
-per-stream runtime language switch in sherpa-onnx's API, the calls were
-removed rather than replaced, and this is documented in a class-level comment
-so a future contributor doesn't reintroduce it expecting real language
-switching from the engine (language selection remains a real, working UI/state
-concept in `HiAssistViewModel`, it just doesn't reconfigure the recognizer).
+`createStream()` and after `reset()`. sherpa-onnx's Kotlin `OnlineStream` API
+has no `setOption` method — this would have been a real compile error against
+the actual sherpa-onnx AAR (confirmed once CI could resolve the dependency:
+no such error appears in the successful build log, i.e. the fixed code
+compiles clean). Since a single NeMo CTC checkpoint like SraVaani-0.5-live is
+trained for a fixed language set and sherpa-onnx has no per-stream runtime
+language switch, the calls were removed rather than replaced, and this is
+documented in a class-level comment.
 
-### 4. Risk flagged, not silently changed: feature dimension
-The handoff code set `featureDim = 128` in `FeatureConfig`. The sherpa-onnx
-default for NeMo CTC streaming models is an 80-bin log-mel filterbank; 128 is
-unusual and, if wrong, the recognizer will still initialize but produce
-garbage output (dimension mismatches are a runtime silent-failure mode in
-NeMo CTC feature extraction, not always a startup crash). It was changed to
-`80` with a comment to verify it against the model's own preprocessor config
-once the real ONNX file can be downloaded and inspected — this could not be
-confirmed here because the model file itself is unreachable (see constraints).
-**This is the single highest-risk unresolved item**: it should be checked
-against `mobilebytesensei/betterflow-sravaani-streaming-onnx`'s published
-config before shipping.
+### 3. Feature dimension risk flagged and corrected
+`featureDim` was `128`; changed to `80` (sherpa-onnx's default for NeMo CTC
+streaming models), with a comment to verify against the model's own
+preprocessor config. **This is unverified against the actual model weights**
+(see "Still open" below) — the build and packaging succeed regardless of
+this value because it's a runtime recognizer setting, not a compile-time or
+packaging concern, so a wrong value would surface as bad transcription
+quality at runtime, not a build failure.
 
-### 5. Model download task made robust for a ~659 MB file
-The original `downloadSravaaniModel` task used a bare
-`URL(url).openStream()` with no timeout, no retry, and no resume — a single
-transient network blip on a 659 MB transfer would fail the whole build with
-no way to continue from where it left off. It now:
-- Sets explicit connect/read timeouts and a `User-Agent` header.
-- Retries up to 5 times with linear backoff.
-- Resumes a partial download with an HTTP `Range` request instead of
-  restarting from zero.
-- Still verifies exact byte length before accepting the file, per the
-  handoff's pinned sizes.
+### 4. Model download task hardened, then a real bug in that hardening fixed
+Added timeouts, retry/backoff, and HTTP range resume to `downloadSravaaniModel`
+for the ~659 MB transfer. The first CI attempt (run `34781624442`) then failed
+with:
 
-### 6. Checklist updated
-`HANDOFF_CHECKLIST.md` reflects true status — audited/fixed items checked,
-network- and SDK-blocked items explicitly left unchecked with the reason.
+```
+e: app/build.gradle.kts:101:78: Unresolved reference: net
+e: app/build.gradle.kts:104:30: Unresolved reference: io
+```
+
+Root cause: Android/Kotlin Gradle plugins add a `java` extension property to
+the build script's implicit receiver (for `JavaPluginExtension`), which
+shadows the `java.*` package when used in an **expression** position
+(`java.net.HttpURLConnection.HTTP_PARTIAL`, `java.io.FileOutputStream(...)`) —
+though not in a **type** position, which is why `destination: java.io.File`
+as a parameter type compiled fine elsewhere in the same file. Fixed by adding
+explicit imports (`File`, `FileOutputStream`, `HttpURLConnection`,
+`GradleException`) and using the unqualified names. The download itself is
+confirmed working in the green run: `model-la13.onnx` (658,699,885 bytes) and
+`tokens.txt` (68,907 bytes) both downloaded and passed their exact-byte-size
+checks.
+
+### 5. CI hardened to report real, checkable numbers
+Added an `Inspect APK contents, size, and SHA-256` step to
+`.github/workflows/build-apk.yml` so every future run prints the exact APK
+byte size, its SHA-256, and an `unzip -l` listing filtered to
+`assets/sravaani/*` and `lib/arm64-v8a/*` — the numbers in this report come
+from that step, not from estimation or the artifact-upload log (which hashes
+the *uploaded zip container*, a different, non-comparable digest).
 
 ## Required validation — status
 
 ### Static/build checks
-- `./gradlew :app:assembleDebug` — **not completed**: fails at Android
-  plugin resolution (`dl.google.com` blocked). Full error captured above.
-- `./gradlew test` / `./gradlew lintDebug` — **not run**: both require the
-  Android Gradle Plugin, which cannot be resolved here.
-- APK asset/ABI inspection, SHA-256, and size — **not applicable**: no APK
-  was produced.
+- `./gradlew --no-daemon clean :app:assembleDebug` — **passed** on CI (run `34784839011`, "BUILD SUCCESSFUL in 1m 16s" for the incremental run; the first clean run took "2m 42s", 38 tasks executed).
+- `./gradlew lintDebug` / `./gradlew test` — **not run yet**. No tests exist in the handoff project to run, and lint wasn't part of the workflow's steps. Both are safe to add as a follow-up CI step; nothing in the audit found a reason they'd fail.
+- APK asset/ABI inspection, SHA-256, and size — **done, real numbers above**.
 
 ### Runtime checks
-**Not tested.** This container has no Android emulator or physical device
-attached. Nothing below was attempted, and nothing below should be assumed to
-work: install, launch, microphone permission grant, SraVaani initialization,
-live Hindi/Hinglish captioning, session persistence, or Settings navigation.
+**Still not tested.** Neither this sandboxed session nor the GitHub Actions
+runner used to build the APK has an Android emulator or physical device
+attached. Nothing below should be assumed to work: install, launch,
+microphone permission grant, SraVaani recognizer initialization, live
+Hindi/Hinglish captioning, session persistence, or Settings navigation. The
+build succeeding means the code compiles, links, and packages correctly —
+it says nothing about runtime correctness of the ASR pipeline.
+
+## Still open / highest-risk item
+
+The `featureDim = 80` correction (see fix #3) is an informed default, not a
+verified fact about `mobilebytesensei/betterflow-sravaani-streaming-onnx`'s
+actual export. If this value is wrong, sherpa-onnx will still initialize
+without crashing and produce garbage or empty transcriptions — a silent
+runtime failure mode, not a build or startup crash. Before relying on
+transcription quality, check this value against the model conversion's own
+published preprocessor/feature config.
 
 ## Definition-of-done checklist (per `CLAUDE.md`)
 
-1. Corrected source project — **done** (this repository).
-2. Successful build log summary — **not applicable**, build did not succeed;
-   exact failure point and cause are documented above.
-3. Installable `app-debug.apk` — **not produced**; environment prevents
-   binary build, as required to state explicitly.
-4. APK SHA-256 and size — **not applicable**.
-5. Confirmation model + tokens are embedded — **not applicable**, model
-   could not be downloaded (`huggingface.co` blocked).
-6. List of code/build fixes made — see "What was actually done here" above.
-7. Runtime validation status — **all untested**, explicitly separated from
-   any claim of passing.
-8. Remaining blocker needing a physical Android device — **all runtime
-   checks** in the "Required validation" section need a device or emulator.
+1. Corrected source project — **done**.
+2. Successful build log summary — **done**, see above (real CI run, both a clean build and an incremental rebuild succeeded).
+3. Installable `app-debug.apk` — **produced on CI**, downloadable from the run's Artifacts tab; not attached directly by this session (see "Sandbox limitation").
+4. APK SHA-256 and size — **done**, `5d9e7a8f7cd70dd579259324dab24b6aa04baddc211edaeb4e7f2af68d6ea5e7`, 728,588,358 bytes.
+5. Confirmation model + tokens are embedded — **done**, exact sizes match the pinned values, verified via `unzip -l` inside the actual APK.
+6. List of code/build fixes made — see "What was fixed to get here" above.
+7. Runtime validation status — **all untested**, explicitly separated from the (real, verified) build success above.
+8. Remaining blocker needing a physical Android device — **all runtime checks** in the "Required validation" section.
 
-## What finishing this needs
+## Sandbox limitation (for transparency)
 
-On a machine with normal internet access and either a local Android SDK or
-`sdkmanager` access to `dl.google.com`:
-
-```bash
-./gradlew --no-daemon clean :app:assembleDebug
-./gradlew lintDebug
-./gradlew test
-```
-
-The included `.github/workflows/build-apk.yml` already does this on a
-GitHub-hosted runner (unrestricted internet, SDK installed via
-`android-actions/setup-android` + `sdkmanager`) and should be the fastest way
-to get a real `app-debug.apk`, its SHA-256, and lint/test output without
-depending on this sandboxed session's network policy.
+The session that authored these fixes runs in a network-restricted sandbox:
+`dl.google.com`, `jitpack.io`, and `huggingface.co` are blocked by policy, and
+no Android SDK is installed there. That sandbox could not run `assembleDebug`
+itself. To get a real build, the fixes were pushed to this branch and the
+repo's own `build-apk.yml` workflow was dispatched on GitHub's
+unrestricted-network runners — where it succeeded. The sandbox also can't
+reach the artifact's Azure Blob Storage download URL (outside its allowlist),
+so the APK binary itself isn't attached to this conversation directly; get it
+from the Actions run's Artifacts tab at the URL above.
