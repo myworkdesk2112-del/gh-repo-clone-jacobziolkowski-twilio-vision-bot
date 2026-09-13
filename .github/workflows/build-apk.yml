@@ -36,6 +36,18 @@ jobs:
       - name: Build arm64 debug APK with embedded SraVaani
         run: gradle --no-daemon :app:assembleDebug
 
+      - name: Run Android Lint
+        run: gradle --no-daemon :app:lintDebug
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Verify embedded model and APK
         run: |
           test -f app/src/main/assets/sravaani/model-la13.onnx
