@@ -121,7 +121,7 @@ class BhashiniSttEngine : SttEngine {
         put("interimIntervalMs", 200)
     }
 
-    private fun parseServerMessage(raw: String): Caption? = runCatching {
+    internal fun parseServerMessage(raw: String): Caption? = runCatching {
         val root = JSONObject(raw)
         val event = root.optString("event")
         val text = sequenceOf(
@@ -143,7 +143,7 @@ class BhashiniSttEngine : SttEngine {
         Caption(text = text, isFinal = explicitFinal)
     }.getOrNull()
 
-    private fun languageName(codeOrName: String): String = when (codeOrName.lowercase()) {
+    internal fun languageName(codeOrName: String): String = when (codeOrName.lowercase()) {
         "en", "english" -> "English"
         "hi", "hindi" -> "Hindi"
         "bn", "bengali" -> "Bengali"

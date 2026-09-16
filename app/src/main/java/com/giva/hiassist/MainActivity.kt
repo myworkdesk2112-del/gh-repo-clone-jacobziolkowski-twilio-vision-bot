@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.giva.hiassist.domain.Caption
+import com.giva.hiassist.domain.Languages
 import com.giva.hiassist.domain.Session
 import com.giva.hiassist.domain.SttMode
 import com.giva.hiassist.ui.HiAssistViewModel
@@ -377,20 +378,5 @@ private fun AppFooter(selected: AppTab, onSelected: (AppTab) -> Unit) {
     }
 }
 
-private val supportedLanguages = listOf("hi", "gu", "bn", "mr", "ml", "te", "ta", "kn", "pa")
-private fun languageName(code: String) = when (code) {
-    "hi" -> "Hindi / Hinglish"
-    "gu" -> "Gujarati"
-    "bn" -> "Bengali"
-    "mr" -> "Marathi"
-    "ml" -> "Malayalam"
-    "te" -> "Telugu"
-    "ta" -> "Tamil"
-    "kn" -> "Kannada"
-    "pa" -> "Punjabi"
-    else -> "Hindi / Hinglish"
-}
-private fun nextLanguage(code: String): String {
-    val i = supportedLanguages.indexOf(code).let { if (it < 0) 0 else it }
-    return supportedLanguages[(i + 1) % supportedLanguages.size]
-}
+private fun languageName(code: String) = Languages.displayName(code)
+private fun nextLanguage(code: String): String = Languages.next(code)

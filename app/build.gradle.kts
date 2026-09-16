@@ -154,4 +154,10 @@ dependencies {
     implementation("com.github.k2-fsa:sherpa-onnx:v1.13.4")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    testImplementation("junit:junit:4.13.2")
+    // Android's org.json stubs throw on every call in a plain JVM unit test;
+    // this pulls in the real implementation so BhashiniSttEngine's JSON
+    // parsing can be tested without Robolectric/instrumentation.
+    testImplementation("org.json:json:20240303")
 }

@@ -36,6 +36,18 @@ jobs:
       - name: Build arm64 debug APK with embedded SraVaani
         run: gradle --no-daemon :app:assembleDebug
 
+      - name: Run unit tests
+        run: gradle --no-daemon :app:testDebugUnitTest
+
+      - name: Upload unit test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Run Android Lint
         run: gradle --no-daemon :app:lintDebug
 
@@ -47,6 +59,40 @@ jobs:
           path: app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Verify SraVaani ONNX model feature dimension
+        run: |
+          python3 -m pip install --quiet onnx
+          python3 - <<'PYEOF'
+          import onnx
+
+          model = onnx.load("app/src/main/assets/sravaani/model-la13.onnx")
+
+          def shape_of(value_info):
+              dims = []
+              for d in value_info.type.tensor_type.shape.dim:
+                  dims.append(d.dim_value if d.dim_value else (d.dim_param or "?"))
+              return dims
+
+          print("== ONNX graph inputs (name: shape) ==")
+          for inp in model.graph.input:
+              print(f"{inp.name}: {shape_of(inp)}")
+
+          print("== ONNX graph outputs (name: shape) ==")
+          for out in model.graph.output:
+              print(f"{out.name}: {shape_of(out)}")
+
+          # The audio/feature input for a NeMo-style streaming CTC ONNX export
+          # carries one fixed (non-batch, non-time) dimension: the feature bin
+          # count. Report every candidate so the value baked into
+          # SravaaniSttEngine.FEATURE_DIM (currently 80) can be checked by
+          # eye against the model actually shipped in this build.
+          print("== Candidate feature dimensions (fixed dims other than 1) ==")
+          for inp in model.graph.input:
+              for d in shape_of(inp):
+                  if isinstance(d, int) and d not in (1,) and d < 2000:
+                      print(f"{inp.name} has a fixed dimension: {d}")
+          PYEOF
 
       - name: Verify embedded model and APK
         run: |
