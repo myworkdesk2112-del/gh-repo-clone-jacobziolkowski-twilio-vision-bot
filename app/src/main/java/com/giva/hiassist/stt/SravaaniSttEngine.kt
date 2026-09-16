@@ -124,11 +124,14 @@ class SravaaniSttEngine(private val context: Context) : SttEngine {
 
     companion object {
         private const val SAMPLE_RATE = 16000
-        // 80-bin log-mel fbank is the sherpa-onnx default for NeMo CTC streaming
-        // models. This must match the feature extractor the conversion was
-        // exported with; verify against the model's own preprocessor config
-        // once the real ONNX/tokens files are available.
-        private const val FEATURE_DIM = 80
+        // Confirmed against the actual shipped model, not assumed: CI run
+        // 35156873485 loaded model-la13.onnx with onnx.load() and printed
+        // its graph inputs. The "audio_signal" input has shape
+        // ['B', 128, 'T'] -- 128 is the real feature-bin dimension this
+        // NeMo cache-aware streaming conformer export expects. (An earlier
+        // pass here had "corrected" this to sherpa-onnx's generic 80-bin
+        // default without checking the real model; that was wrong.)
+        private const val FEATURE_DIM = 128
         private const val MODEL_DIR = "sravaani"
         private const val MODEL_FILE = "model-la13.onnx"
         private const val TOKENS_FILE = "tokens.txt"
